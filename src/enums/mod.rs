@@ -1,0 +1,1 @@
+pub mod image_processing_error;

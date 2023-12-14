@@ -1,0 +1,26 @@
+syntax = "proto3";
+package imager;
+
+service EditorService {
+    rpc Invert (InvertImageRequest) returns (InvertImageResponse);
+    rpc BlendImages (BlendImageRequest) returns (BlendImageResponse);
+}
+
+message InvertImageRequest {
+    bytes image = 1;
+}
+
+message InvertImageResponse {
+    bytes image = 1;
+}
+
+message BlendImageRequest {
+    bytes first_image = 1;
+    bytes second_image = 2;
+    float alpha = 3;
+}
+
+message BlendImageResponse {
+    bytes image = 1;
+}
+

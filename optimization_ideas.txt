@@ -1,0 +1,12 @@
+- Use gpu instead of cpu.
+
+- Load balance for the gpu.
+
+- Caching for reoccuring images (checksum)
+    - This reduces the need to repeatedly process the same images, saving time and resources.
+
+- Handle requests in batches
+    - This can reduce the overhead of handling individual requests and is particularly effective in GPU-based processing.
+
+- Use the most efficient image encodings (jpg - JPEG2000)
+    - Can minimize network latency and reduce processing time on both client and server sides.
