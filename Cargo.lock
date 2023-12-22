@@ -735,6 +735,7 @@ dependencies = [
  "criterion",
  "image",
  "prost",
+ "rayon",
  "tokio",
  "tonic",
  "tonic-build",

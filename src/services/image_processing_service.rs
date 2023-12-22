@@ -37,7 +37,7 @@ async fn blend_image(image_entry: &DirEntry, result_path: &str, client: &GrpcCli
         }
     };
 
-    let blend_bytes = match fs::read("./blend_image/blend-image.png") {
+    let blend_bytes = match fs::read("./blend_image/blend-image.jpg") {
         Ok(bytes) => bytes,
         Err(e) => {
             error!("Failed to read blend image bytes: {}", e);

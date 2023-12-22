@@ -2,6 +2,7 @@ use image::{load_from_memory, ImageOutputFormat, DynamicImage, RgbaImage, Rgba};
 use std::io::Cursor;
 use tonic::{Request, Status, Response};
 use tracing::info;
+use rayon::prelude::*;
 
 use imager::{InvertImageRequest, InvertImageResponse};
 use imager::{BlendImageRequest, BlendImageResponse};
@@ -20,19 +21,16 @@ impl EditorService for Editor {
         &self,
         request: Request<InvertImageRequest>
     ) -> Result<Response<InvertImageResponse>, Status> {
-        info!("Got a request: {:?}", request);
+        let InvertImageRequest {
+            image
+        } = request.into_inner();
 
-        let request_image_buffer = request.into_inner().image;
+        let mut loaded_image = load_image(&image)?;
 
-        let mut image = match load_from_memory(&request_image_buffer) {
-            Ok(img) => img,
-            Err(_) => return Err(Status::new(tonic::Code::InvalidArgument, "Invalid image data")),
-        };
-
-        invert_image_colors(&mut image);
+        invert_image_colors(&mut loaded_image);
         let mut response_image = Cursor::new(Vec::new());
         
-        if let Err(_) = image.write_to(&mut response_image, ImageOutputFormat::Png) {
+        if let Err(_) = loaded_image.write_to(&mut response_image, ImageOutputFormat::Png) {
             return Err(Status::new(tonic::Code::Internal, "Failed to process the image"));
         }
 
@@ -49,23 +47,14 @@ impl EditorService for Editor {
                 alpha,
             } = request.into_inner();
         
-            let first_image_buffer = load_and_convert_image(&first_image)?;
-            let second_image_buffer = load_and_convert_image(&second_image)?;
+            let first_image_buffer = load_image(&first_image)?.into_rgba8();
+            let second_image_buffer = load_image(&second_image)?.into_rgba8();
 
             if first_image_buffer.dimensions() != second_image_buffer.dimensions() {
                 return Err(Status::new(tonic::Code::InvalidArgument, "Image dimension mismatch"))
             }
 
-            let blended = RgbaImage::from_fn(first_image_buffer.width(), first_image_buffer.height(), |x, y| {
-                let pixel1 = first_image_buffer.get_pixel(x, y).0;
-                let pixel2 = second_image_buffer.get_pixel(x, y).0;
-                
-                let blend_channel = |channel: usize| {
-                    ((pixel1[channel] as f32 * alpha) + (pixel2[channel] as f32 * (1.0 - alpha))) as u8
-                };
-        
-                Rgba([blend_channel(0), blend_channel(1), blend_channel(2), 255])
-            });
+            let blended = blend_images_parallel(&first_image_buffer, &second_image_buffer, alpha);
 
             let mut response_image = Cursor::new(Vec::new());
             DynamicImage::ImageRgba8(blended)
@@ -76,12 +65,36 @@ impl EditorService for Editor {
     }
 }
 
-fn load_and_convert_image(image_data: &[u8]) -> Result<RgbaImage, Status> {
+fn load_image(image_data: &[u8]) -> Result<DynamicImage, Status> {
     load_from_memory(image_data)
         .map_err(|_| Status::new(tonic::Code::InvalidArgument, "Invalid image data"))
-        .map(|img| img.into_rgba8())
+        .map(|img| img)
 }
 
 fn invert_image_colors(image: &mut DynamicImage) {
     image.invert();
+}
+
+fn blend_images_parallel(first_image: &RgbaImage, second_image: &RgbaImage, alpha: f32) -> RgbaImage {
+    let (width, height) = first_image.dimensions();
+
+    let blended_pixels: Vec<_> = 
+    first_image
+        .pixels()
+        .zip(second_image.pixels())
+        .par_bridge()
+        .map(|(pixel1, pixel2)| {
+            blend_pixel(pixel1, pixel2, alpha)
+        })
+        .collect();
+
+    RgbaImage::from_raw(width, height, blended_pixels.into_iter().flatten().collect()).unwrap()
+}
+
+fn blend_pixel(pixel1: &Rgba<u8>, pixel2: &Rgba<u8>, alpha: f32) -> [u8; 4] {
+    let blend_channel = |channel: usize| {
+        ((pixel1.0[channel] as f32 * alpha) + (pixel2.0[channel] as f32 * (1.0 - alpha))) as u8
+    };
+
+    [blend_channel(0), blend_channel(1), blend_channel(2), pixel1[3]]
 }

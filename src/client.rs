@@ -33,3 +33,6 @@ async fn main() {
 // Test with 100 or more images (different sizes)
 // Find bottlenecks and performance issues
 // Benchmark functions (look for libs) 
+
+// try rayon iter
+// increase benchmarks
